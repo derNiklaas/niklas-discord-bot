@@ -69,8 +69,10 @@ function checkTwitchStatus() {
                 lastLiveNotification = await test.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(data.title, game, viewer, thumbnail));
             }
         } else {
-            lastLiveNotification.delete().then();
-            lastLiveNotification = undefined;
+            if (lastLiveNotification) {
+                lastLiveNotification.delete().then();
+                lastLiveNotification = undefined;
+            }
         }
     });
 }
