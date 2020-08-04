@@ -11,14 +11,15 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^13.13.12"
+    "@types/node": "^13.13.12",
+    "@types/node-fetch": "^2.5.7",
+    "@types/request": "^2.48.5",
+    "@types/ws": "^7.2.6"
   },
   "dependencies": {
-    "@types/request": "^2.48.5",
-    "@types/ws": "^7.2.6",
     "discord.js": "^12.2.0",
     "dotenv": "^8.2.0",
-    "request": "^2.88.2",
+    "node-fetch": "^2.6.0",
     "typescript": "^3.9.7"
   }
 }

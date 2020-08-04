@@ -1,17 +1,20 @@
 import {Client, GuildMember, Message, MessageEmbed, MessageReaction, PartialUser, TextChannel, User} from "discord.js";
-import request from 'request';
+import fetch from "node-fetch";
 
 const client: Client = new Client({partials: ['CHANNEL', 'MESSAGE', 'REACTION']});
 const reactableEmotes = ["rainbowsheepgif"];
-const TWITCH_ROLE_ID: string = "622830603342970901";
-const ROLES_CHANNEL_ID: string = "686356862324834305";
-const LIVE_CHANNEL_ID: string = "497003072288194580";
+const TWITCH_ROLE_ID: string = "622830603342970901"; // "Twitch" Role
+const ROLES_CHANNEL_ID: string = "686356862324834305"; // Roles Channel
+const LIVE_CHANNEL_ID: string = "497003072288194580"; // Live Channel
+//const LIVE_CHANNEL_ID: string = "738740086438625280"; // Test Channel
 
 let lastLiveNotification: Message;
+let width = 550;
 require('dotenv').config();
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
+    checkTwitchStatus().then();
     setInterval(checkTwitchStatus, 60000);
 });
 
@@ -44,37 +47,37 @@ client.on('messageReactionRemove', (reaction: MessageReaction, user: User | Part
 });
 
 
-function checkTwitchStatus() {
-    request("https://api.twitch.tv/helix/streams?user_login=derniklaas", {
+async function checkTwitchStatus() {
+    const response = await fetch("https://api.twitch.tv/helix/streams?user_login=derniklaas", {
         headers: {
             "Client-ID": process.env.TWITCH_CLIENT_ID,
             "Authorization": "Bearer " + process.env.TWITCH_TOKEN
         }
-    }, async (error, httpResponse, body) => {
-        if (error) {
-            console.log("error: " + error);
-            return;
-        }
-        let data = JSON.parse(body);
-        data = data.data[0];
-        if (data && data.type === "live") {
-            const test = client.channels.cache.get(LIVE_CHANNEL_ID) as TextChannel;
-            const game = await getGameFromID(data.game_id);
-            const viewer = data.viewer_count;
-            const width = 600;
-            const thumbnail = data.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
-            if (lastLiveNotification) {
-                lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(data.title, game, viewer, thumbnail)).then();
-            } else {
-                lastLiveNotification = await test.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(data.title, game, viewer, thumbnail));
-            }
-        } else {
-            if (lastLiveNotification) {
-                lastLiveNotification.delete().then();
-                lastLiveNotification = undefined;
-            }
-        }
     });
+    if (response.ok) {
+        response.json().then(async json => {
+            json = json.data[0];
+            if (json && json.type === "live") {
+                const test = client.channels.cache.get(LIVE_CHANNEL_ID) as TextChannel;
+                const game = await getGameFromID(json.game_id);
+                const viewer = json.viewer_count;
+                const thumbnail = json.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
+                width++;
+                if (lastLiveNotification) {
+                    lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(json.title, game, viewer, thumbnail)).then();
+                } else {
+                    lastLiveNotification = await test.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(json.title, game, viewer, thumbnail));
+                }
+            } else {
+                if (lastLiveNotification) {
+                    lastLiveNotification.delete().then();
+                    lastLiveNotification = undefined;
+                }
+            }
+        });
+    } else {
+        console.log("Error");
+    }
 }
 
 function buildEmbed(title: string, game: string, viewer: string, thumbnail: string): MessageEmbed {
@@ -91,33 +94,25 @@ function buildEmbed(title: string, game: string, viewer: string, thumbnail: stri
 }
 
 async function getGameFromID(id: string): Promise<string> {
-    let data = undefined;
-    request('https://api.twitch.tv/helix/games?id=' + id, {
+    const response = await fetch(`https://api.twitch.tv/helix/games?id=${id}`, {
         headers: {
             "Client-ID": process.env.TWITCH_CLIENT_ID,
             "Authorization": "Bearer " + process.env.TWITCH_TOKEN
         }
-    }, (error, httpResponse, body) => {
-        if (error) {
-            console.log("error fetching game");
-        }
-        const json = JSON.parse(body);
-        if (json.data.length === 0) {
-            data = "";
-        } else {
-            data = json.data[0].name;
-        }
     });
 
-    while (!data) {
-        await sleep(10);
+    if (response.ok) {
+        const json = await response.json();
+        console.log(json);
+        if (json.data.length === 0) {
+            return "Unbekannt";
+        } else {
+            return json.data[0].name;
+        }
+    } else {
+        console.log("Error");
+        return "Fehler";
     }
-
-    return data;
-}
-
-function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 client.login(process.env.DISCORD_TOKEN).then();
