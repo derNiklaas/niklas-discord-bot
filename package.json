@@ -1,15 +1,16 @@
 {
   "name": "niklasdcbot",
   "version": "1.0.0",
-  "description": "",
+  "description": "A discord bot for my server.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "repository": "https://github.com/derNiklaas/niklas-discord-bot",
+  "author": "derNiklaas",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^13.13.12",
     "@types/node-fetch": "^2.5.7",
