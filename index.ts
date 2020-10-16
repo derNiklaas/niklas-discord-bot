@@ -8,6 +8,14 @@ const ROLES_CHANNEL_ID: string = "686356862324834305"; // Roles Channel
 const LIVE_CHANNEL_ID: string = "497003072288194580"; // Live Channel
 //const LIVE_CHANNEL_ID: string = "738740086438625280"; // Test Channel
 
+let reconnectTries = 3;
+let streamCache = {
+    title: "",
+    game: "",
+    viewers: -1,
+    thumbnail: ""
+}
+
 let lastLiveNotification: Message;
 let width = 550;
 require('dotenv').config();
@@ -58,37 +66,61 @@ async function checkTwitchStatus() {
         response.json().then(async json => {
             json = json.data[0];
             if (json && json.type === "live") {
-                const test = client.channels.cache.get(LIVE_CHANNEL_ID) as TextChannel;
-                const game = await getGameFromID(json.game_id);
-                const viewer = json.viewer_count;
-                const thumbnail = json.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
+                reconnectTries = 3;
+                const discordLiveChat = client.channels.cache.get(LIVE_CHANNEL_ID) as TextChannel;
+
+                streamCache.title = json.title;
+                streamCache.game = await getGameFromID(json.game_id);
+                streamCache.viewers = json.viewer_count;
+                streamCache.thumbnail = json.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
                 width++;
+
                 if (lastLiveNotification) {
-                    lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(json.title, game, viewer, thumbnail)).then();
+                    lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache)).then();
                 } else {
-                    lastLiveNotification = await test.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(json.title, game, viewer, thumbnail));
+                    lastLiveNotification = await discordLiveChat.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache));
                 }
+
             } else {
                 if (lastLiveNotification) {
-                    lastLiveNotification.delete().then();
-                    lastLiveNotification = undefined;
+                    if (reconnectTries === 0) {
+                        lastLiveNotification.delete().then();
+                        lastLiveNotification = undefined;
+                    } else {
+                        reconnectTries--;
+                        lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache)).then();
+                    }
                 }
             }
         });
     } else {
-        console.log("Error");
+        console.log("Error - Invalid OAuth Token?");
+        console.log(response.statusText);
     }
 }
 
-function buildEmbed(title: string, game: string, viewer: string, thumbnail: string): MessageEmbed {
+function buildEmbed(streamInfo: object): MessageEmbed {
     const embed: MessageEmbed = new MessageEmbed();
     embed.setColor("#9400D3");
     embed.setAuthor("derNiklaas", "https://cdn.discordapp.com/avatars/153113441429749760/a_5d47b975cfdd39ca9f82be920008958d.webp", "https://www.twitch.tv/derNiklaas");
-    embed.setTitle(title);
+    // @ts-ignore
+    embed.setTitle(streamInfo.title);
     embed.setURL("https://www.twitch.tv/derNiklaas");
-    embed.addField("Kategorie", game, true);
-    embed.addField("Zuschauer", viewer, true);
-    embed.setImage(thumbnail);
+    // @ts-ignore
+    embed.addField("Kategorie", streamInfo.game, true);
+    // @ts-ignore
+    embed.addField("Zuschauer", streamInfo.viewers, true);
+    // @ts-ignore
+    embed.setImage(streamInfo.thumbnail);
+
+    const date = new Date(Date.now());
+
+    let tries = "";
+    if (reconnectTries !== 3) {
+        tries = `Offline? Noch ${reconnectTries} Versuche.`;
+    }
+
+    embed.setFooter(`Letztes Update: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()} ${tries}`);
 
     return embed;
 }
@@ -100,17 +132,17 @@ async function getGameFromID(id: string): Promise<string> {
             "Authorization": "Bearer " + process.env.TWITCH_TOKEN
         }
     });
-
     if (response.ok) {
         const json = await response.json();
-        console.log(json);
+        //console.log(json);
         if (json.data.length === 0) {
             return "Unbekannt";
         } else {
             return json.data[0].name;
         }
     } else {
-        console.log("Error");
+        console.log("Error - Invalid OAuth Token?");
+        console.log(response.statusText);
         return "Fehler";
     }
 }
