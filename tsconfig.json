@@ -2,10 +2,11 @@
   "compilerOptions": {
     "module": "commonjs",
     "esModuleInterop": true,
-    "target": "es6",
+    "target": "es2020",
     "noImplicitAny": true,
     "moduleResolution": "node",
     "sourceMap": true,
+    "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
       "*": [
@@ -15,4 +16,3 @@
     }
   }
 }
-

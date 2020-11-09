@@ -1,0 +1,13 @@
+{
+    "online": [
+        "{{MENTION}} Niklas ist gerade live mit {{GAME}}: {{TITLE}} ",
+        "{{MENTION}} Niklas streamt {{GAME}}",
+        "Hallo {{MENTION}}, wusstet ihr das der gute Niklas gerade live ist? <https://twitch.tv/derNiklaas>",
+        "@derNiklaas ist gerade am {{TYPE}}. schaut vorbei {{MENTION}!",
+        "{{MENTION}} kann mir jemand helfen? ich hab gesehen das @derNiklaas mit {{TITLE}} live gegangen ist, aber ich hab keine Ahnung welches Spiel das ist <:skateASD:672941269353234452>"
+    ],
+    "offline": [
+        "niklas ist gerade offline gegangen",
+        "danke für die {{VIEWERCOUNT}} das sie bei dem {{GAME}} game stream dabei waren!"
+    ]
+}
