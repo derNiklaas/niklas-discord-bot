@@ -28,7 +28,6 @@ client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
     checkTwitchStatus().then();
     setInterval(checkTwitchStatus, 60000);
-    console.log("test");
 });
 
 client.on('messageReactionAdd', async (reaction: MessageReaction, user: User | PartialUser) => {
@@ -38,13 +37,13 @@ client.on('messageReactionAdd', async (reaction: MessageReaction, user: User | P
     if (reaction.message.channel.id !== ROLES_CHANNEL_ID) {
         return;
     }
-    const member: GuildMember = await reaction.message.guild.members.fetch(user.id);
+    let member: GuildMember = await reaction.message.guild.members.fetch(user.id);
     const roleID = reactableEmotes.get(reaction.emoji.name);
 
-    if (!member.roles.cache.has(roleID)) {
-        member.roles.add(roleID).then();
-        console.log(`[Info] Added role to ${user.username}`);
-    }
+    console.log("[Info] Reaction Added");
+
+    member.roles.add(roleID);
+    console.log(`[Info] Added role to ${user.username}`);
 });
 
 client.on('messageReactionRemove', async (reaction: MessageReaction, user: User | PartialUser) => {
@@ -57,12 +56,10 @@ client.on('messageReactionRemove', async (reaction: MessageReaction, user: User 
     const member: GuildMember = await reaction.message.guild.members.fetch(user.id);
     const roleID = reactableEmotes.get(reaction.emoji.name);
 
-    if (member.roles.cache.has(roleID)) {
-        member.roles.remove(roleID).then();
-        console.log(`[Info] Removed role from ${user.username}`);
-    }
+    console.log("[Info] Reaction Removed");
+    member.roles.remove(roleID);
+    console.log(`[Info] Removed role from ${user.username} if they had one.`);
 });
-
 
 async function checkTwitchStatus() {
     const response = await fetch("https://api.twitch.tv/helix/streams?user_login=derniklaas", {
