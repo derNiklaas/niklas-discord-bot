@@ -253,6 +253,7 @@ async function checkTwitchStatus() {
                 streamCache.game = await getGameByID(json.game_id);
                 streamCache.gameID = json.game_id;
             }
+            // yes we are fancy.
             streamCache.title = `[${json.title}](https://twitch.tv/derNiklaas)`;
             streamCache.thumbnail = json.thumbnail_url.replace("{width}", width.toString()).replace("{height}", Math.round(width / 16 * 9).toString());
             width++;
@@ -266,6 +267,12 @@ async function checkTwitchStatus() {
                 lastLiveNotification.edit(text, buildEmbed(streamCache)).then();
             } else {
                 lastLiveNotification = await discordLiveChat.send(text, buildEmbed(streamCache));
+                if (discordLiveChat.permissionsFor(discordLiveChat.guild.id).missing(['SEND_MESSAGES'])) {
+                    await discordLiveChat.overwritePermissions([{
+                        id: discordLiveChat.guild.id,
+                        allow: ['SEND_MESSAGES']
+                    }]);
+                }
             }
 
         } else {
