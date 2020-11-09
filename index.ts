@@ -43,6 +43,7 @@ client.on('messageReactionAdd', async (reaction: MessageReaction, user: User | P
 
     if (!member.roles.cache.has(roleID)) {
         member.roles.add(roleID).then();
+        console.log(`[Info] Added role to ${user.username}`);
     }
 });
 
@@ -58,6 +59,7 @@ client.on('messageReactionRemove', async (reaction: MessageReaction, user: User 
 
     if (member.roles.cache.has(roleID)) {
         member.roles.remove(roleID).then();
+        console.log(`[Info] Removed role from ${user.username}`);
     }
 });
 
