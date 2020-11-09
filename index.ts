@@ -1,12 +1,16 @@
 import {Client, GuildMember, Message, MessageEmbed, MessageReaction, PartialUser, TextChannel, User} from "discord.js";
 import fetch from "node-fetch";
 
-const client: Client = new Client({partials: ['CHANNEL', 'MESSAGE', 'REACTION']});
-const reactableEmotes = ["rainbowsheepgif"];
+const client: Client = new Client({partials: ["CHANNEL", "MESSAGE", "REACTION", "GUILD_MEMBER", "USER"]});
+
 const TWITCH_ROLE_ID: string = "622830603342970901"; // "Twitch" Role
 const ROLES_CHANNEL_ID: string = "686356862324834305"; // Roles Channel
 const LIVE_CHANNEL_ID: string = "497003072288194580"; // Live Channel
 //const LIVE_CHANNEL_ID: string = "738740086438625280"; // Test Channel
+
+const reactableEmotes = new Map();
+reactableEmotes.set("rainbowsheepgif", TWITCH_ROLE_ID); // Twitch Role
+reactableEmotes.set("📝", "775304475756724244"); // Umfragen Role
 
 let reconnectTries = 3;
 let streamCache = {
@@ -24,33 +28,36 @@ client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
     checkTwitchStatus().then();
     setInterval(checkTwitchStatus, 60000);
+    console.log("test");
 });
 
-client.on('messageReactionAdd', (reaction: MessageReaction, user: User | PartialUser) => {
-    if (!reactableEmotes.includes(reaction.emoji.name)) {
+client.on('messageReactionAdd', async (reaction: MessageReaction, user: User | PartialUser) => {
+    if (!reactableEmotes.has(reaction.emoji.name)) {
         return;
     }
     if (reaction.message.channel.id !== ROLES_CHANNEL_ID) {
         return;
     }
-    const member: GuildMember = reaction.message.guild.member(user.id);
+    const member: GuildMember = await reaction.message.guild.members.fetch(user.id);
+    const roleID = reactableEmotes.get(reaction.emoji.name);
 
-    if (!member.roles.cache.has(TWITCH_ROLE_ID)) {
-        member.roles.add(TWITCH_ROLE_ID).then();
+    if (!member.roles.cache.has(roleID)) {
+        member.roles.add(roleID).then();
     }
 });
 
-client.on('messageReactionRemove', (reaction: MessageReaction, user: User | PartialUser) => {
-    if (!reactableEmotes.includes(reaction.emoji.name)) {
+client.on('messageReactionRemove', async (reaction: MessageReaction, user: User | PartialUser) => {
+    if (!reactableEmotes.has(reaction.emoji.name)) {
         return;
     }
     if (reaction.message.channel.id !== ROLES_CHANNEL_ID) {
         return;
     }
-    const member: GuildMember = reaction.message.guild.member(user.id);
+    const member: GuildMember = await reaction.message.guild.members.fetch(user.id);
+    const roleID = reactableEmotes.get(reaction.emoji.name);
 
-    if (member.roles.cache.has(TWITCH_ROLE_ID)) {
-        member.roles.remove(TWITCH_ROLE_ID).then();
+    if (member.roles.cache.has(roleID)) {
+        member.roles.remove(roleID).then();
     }
 });
 
