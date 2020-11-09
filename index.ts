@@ -77,6 +77,10 @@ client.on("messageReactionAdd", async (reaction, user) => {
     if (!member.roles.cache.has(roleID)) {
         member.roles.add(roleID).then();
     }
+    ratelimit.set(user.id, member);
+    setTimeout(() => {
+        ratelimit.delete(user.id);
+    }, 5000);
 });
 
 client.on("messageReactionRemove", async (reaction, user) => {
@@ -92,6 +96,9 @@ client.on("messageReactionRemove", async (reaction, user) => {
         member.roles.remove(roleID).then();
     }
     ratelimit.set(user.id, member);
+    setTimeout(() => {
+        ratelimit.delete(user.id);
+    }, 5000);
 });
 
 
