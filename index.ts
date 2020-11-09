@@ -241,7 +241,7 @@ async function checkTwitchStatus() {
     const discordLiveChat = client.channels.cache.get(LIVE_CHANNEL_ID) as TextChannel;
     if (response.ok) {
         const data: TwitchStreamReturn = await response.json();
-        if (data.data?.length) {
+        if (data && data.data && data.data?.length) {
             const json = data.data[0];
 
             if (json.type === '' && !lastLiveNotification) {
