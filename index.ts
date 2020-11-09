@@ -10,7 +10,7 @@ const LIVE_CHANNEL_ID: string = "497003072288194580"; // Live Channel
 
 const reactableEmotes = new Map();
 reactableEmotes.set("rainbowsheepgif", TWITCH_ROLE_ID); // Twitch Role
-reactableEmotes.set("📝", "775304475756724244"); // Umfragen Role
+reactableEmotes.set("umfragen", "775304475756724244"); // Umfragen Role
 
 let reconnectTries = 3;
 let streamCache = {
