@@ -1,16 +1,29 @@
 import {Client, GuildMember, Message, MessageEmbed, MessageReaction, PartialUser, TextChannel, User} from "discord.js";
 import fetch from "node-fetch";
 
-const client: Client = new Client({partials: ["CHANNEL", "MESSAGE", "REACTION", "GUILD_MEMBER", "USER"]});
+const client = new Client({partials: ["CHANNEL", "MESSAGE", "REACTION", "GUILD_MEMBER", "USER"]});
 
-const TWITCH_ROLE_ID: string = "622830603342970901"; // "Twitch" Role
-const ROLES_CHANNEL_ID: string = "686356862324834305"; // Roles Channel
-const LIVE_CHANNEL_ID: string = "497003072288194580"; // Live Channel
-//const LIVE_CHANNEL_ID: string = "738740086438625280"; // Test Channel
+/** Whether the bot should output debug messages. */
+const DEBUG = false
 
-const reactableEmotes = new Map();
-reactableEmotes.set("rainbowsheepgif", TWITCH_ROLE_ID); // Twitch Role
-reactableEmotes.set("umfragen", "775304475756724244"); // Umfragen Role
+/** The name of the twitch channel. */
+const TWITCH_CHANNEL = "derniklaas"
+/** The id for the twitch role. */
+const TWITCH_ROLE_ID = "622830603342970901";
+/** The id of the poll roll. */
+const POLL_ROLE_ID = "775304475756724244";
+/** The id of the roles channel. */
+const ROLES_CHANNEL_ID = "686356862324834305";
+/** The id of the live channel. */
+const LIVE_CHANNEL_ID = "497003072288194580";
+/** The id of the debug live channel. */
+const DEBUG_LIVE_CHANNEL_ID = "738740086438625280";
+
+const REACTABLE_EMOTES = new Map();
+REACTABLE_EMOTES.set("rainbowsheepgif", TWITCH_ROLE_ID);
+REACTABLE_EMOTES.set("umfragen", POLL_ROLE_ID);
+
+let discordLiveChat: TextChannel;
 
 let reconnectTries = 3;
 let streamCache = {
@@ -24,99 +37,107 @@ let lastLiveNotification: Message;
 let width = 550;
 require('dotenv').config();
 
+// Start checking for streams when the discord bot is ready.
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
+    discordLiveChat = client.channels.cache.get(DEBUG ? DEBUG_LIVE_CHANNEL_ID : LIVE_CHANNEL_ID) as TextChannel
     checkTwitchStatus().then();
-    setInterval(checkTwitchStatus, 60000);
+    setInterval(checkTwitchStatus, 60 * 1000);
 });
 
 client.on('messageReactionAdd', async (reaction: MessageReaction, user: User | PartialUser) => {
-    if (!reactableEmotes.has(reaction.emoji.name)) {
-        return;
-    }
-    if (reaction.message.channel.id !== ROLES_CHANNEL_ID) {
-        return;
-    }
+    // Check if the reaction is in the correct channel
+    if (reaction.message.channel.id !== ROLES_CHANNEL_ID) return;
+
+    // Check if there is a role for that emoji
+    if (!REACTABLE_EMOTES.has(reaction.emoji.name)) return;
+
     let member: GuildMember = await reaction.message.guild.members.fetch(user.id);
-    const roleID = reactableEmotes.get(reaction.emoji.name);
+    const roleID = REACTABLE_EMOTES.get(reaction.emoji.name);
 
-    console.log("[Info] Reaction Added");
+    await member.roles.add(roleID);
 
-    member.roles.add(roleID);
-    console.log(`[Info] Added role to ${user.username}`);
+    if (DEBUG) {
+        console.log(`[Info] Added role to ${user.username}`);
+    }
 });
 
 client.on('messageReactionRemove', async (reaction: MessageReaction, user: User | PartialUser) => {
-    if (!reactableEmotes.has(reaction.emoji.name)) {
-        return;
-    }
-    if (reaction.message.channel.id !== ROLES_CHANNEL_ID) {
-        return;
-    }
-    const member: GuildMember = await reaction.message.guild.members.fetch(user.id);
-    const roleID = reactableEmotes.get(reaction.emoji.name);
+    // Check if the reaction is in the correct channel
+    if (reaction.message.channel.id !== ROLES_CHANNEL_ID) return;
 
-    console.log("[Info] Reaction Removed");
-    member.roles.remove(roleID);
-    console.log(`[Info] Removed role from ${user.username} if they had one.`);
+    // Check if there is a role for that emoji
+    if (!REACTABLE_EMOTES.has(reaction.emoji.name)) return;
+
+    const member: GuildMember = await reaction.message.guild.members.fetch(user.id);
+    const roleID = REACTABLE_EMOTES.get(reaction.emoji.name);
+
+    await member.roles.remove(roleID);
+
+    if (DEBUG) {
+        console.log(`[Info] Removed role from ${user.username} if they had one.`);
+    }
 });
 
 async function checkTwitchStatus() {
-    const response = await fetch("https://api.twitch.tv/helix/streams?user_login=derniklaas", {
+    const response = await fetch(`https://api.twitch.tv/helix/streams?user_login=${TWITCH_CHANNEL}`, {
         headers: {
             "Client-ID": process.env.TWITCH_CLIENT_ID,
-            "Authorization": "Bearer " + process.env.TWITCH_TOKEN
+            "Authorization": `Bearer ${process.env.TWITCH_TOKEN}`
         }
     });
-    if (response.ok) {
-        response.json().then(async json => {
-            json = json.data[0];
-            if (json && json.type === "live") {
-                reconnectTries = 3;
-                const discordLiveChat = client.channels.cache.get(LIVE_CHANNEL_ID) as TextChannel;
+    // Check if there has been an error.
+    if (!response.ok) {
+        console.error("There has been an error while checking the online status:");
+        console.error(response.statusText);
+        return;
+    }
 
-                streamCache.title = json.title;
-                streamCache.game = await getGameFromID(json.game_id);
-                streamCache.viewers = json.viewer_count;
-                streamCache.thumbnail = json.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
-                width++;
+    let json = await response.json();
 
-                if (lastLiveNotification) {
-                    lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache)).then();
-                } else {
-                    lastLiveNotification = await discordLiveChat.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache));
-                }
+    json = json.data[0];
+    if (json && json.type === "live") {
+        reconnectTries = 3;
 
-            } else {
-                if (lastLiveNotification) {
-                    if (reconnectTries === 0) {
-                        lastLiveNotification.delete().then();
-                        lastLiveNotification = undefined;
-                    } else {
-                        reconnectTries--;
-                        lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache)).then();
-                    }
-                }
-            }
-        });
+        streamCache.title = json.title;
+        streamCache.game = await getGameFromID(json.game_id);
+        streamCache.viewers = json.viewer_count;
+        streamCache.thumbnail = json.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
+        width++;
+
+        await updateMessage();
+
     } else {
-        console.log("Error - Invalid OAuth Token?");
-        console.log(response.statusText);
+        if (lastLiveNotification === undefined) return
+
+        if (reconnectTries === 0) {
+            await lastLiveNotification.delete();
+            lastLiveNotification = undefined;
+        } else {
+            reconnectTries--;
+            await updateMessage();
+        }
     }
 }
 
-function buildEmbed(streamInfo: object): MessageEmbed {
-    const embed: MessageEmbed = new MessageEmbed();
+/** Updates the message in the live chat. */
+async function updateMessage() {
+    if (lastLiveNotification !== undefined) {
+        await lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache));
+    } else {
+        lastLiveNotification = await discordLiveChat.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache));
+    }
+}
+
+/** Generates an embed with given twitch stream information. */
+function buildEmbed(streamInfo: any): MessageEmbed {
+    const embed = new MessageEmbed();
     embed.setColor("#9400D3");
     embed.setAuthor("derNiklaas", "https://cdn.discordapp.com/avatars/153113441429749760/a_5d47b975cfdd39ca9f82be920008958d.webp", "https://www.twitch.tv/derNiklaas");
-    // @ts-ignore
     embed.setTitle(streamInfo.title);
-    embed.setURL("https://www.twitch.tv/derNiklaas");
-    // @ts-ignore
+    embed.setURL(`https://www.twitch.tv/${TWITCH_CHANNEL}`);
     embed.addField("Kategorie", streamInfo.game, true);
-    // @ts-ignore
     embed.addField("Zuschauer", streamInfo.viewers, true);
-    // @ts-ignore
     embed.setImage(streamInfo.thumbnail);
 
     const date = new Date(Date.now());
@@ -139,20 +160,20 @@ async function getGameFromID(id: string): Promise<string> {
     const response = await fetch(`https://api.twitch.tv/helix/games?id=${id}`, {
         headers: {
             "Client-ID": process.env.TWITCH_CLIENT_ID,
-            "Authorization": "Bearer " + process.env.TWITCH_TOKEN
+            "Authorization": `Bearer ${process.env.TWITCH_TOKEN}`
         }
     });
+
     if (response.ok) {
         const json = await response.json();
-        //console.log(json);
         if (json.data.length === 0) {
             return "Unbekannt";
         } else {
             return json.data[0].name;
         }
     } else {
-        console.log("Error - Invalid OAuth Token?");
-        console.log(response.statusText);
+        console.error("Error - Invalid OAuth Token?");
+        console.error(response.statusText);
         return "Fehler";
     }
 }
