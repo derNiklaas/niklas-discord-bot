@@ -1,13 +1,28 @@
-import {Client, GuildMember, Message, MessageEmbed, MessageReaction, PartialUser, TextChannel, User} from "discord.js";
-import fetch from "node-fetch";
+import {
+    Client,
+    GuildMember,
+    Intents,
+    Message,
+    MessageEmbed,
+    MessageReaction,
+    PartialUser,
+    TextChannel,
+    User
+} from "discord.js";
+import fetch from 'node-fetch';
 
-const client = new Client({partials: ["CHANNEL", "MESSAGE", "REACTION", "GUILD_MEMBER", "USER"]});
+// 'USER' | 'CHANNEL' | 'GUILD_MEMBER' | 'MESSAGE' | 'REACTION';
+const client = new Client(
+    {
+        partials: ["USER", "CHANNEL", "GUILD_MEMBER", "MESSAGE", "REACTION"],
+        intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_EMOJIS_AND_STICKERS, Intents.FLAGS.GUILD_MESSAGE_REACTIONS]
+    });
 
 /** Whether the bot should output debug messages. */
-const DEBUG = false
+const DEBUG = false;
 
 /** The name of the twitch channel. */
-const TWITCH_CHANNEL = "derniklaas"
+const TWITCH_CHANNEL = "derniklaas";
 /** The id for the twitch role. */
 const TWITCH_ROLE_ID = "622830603342970901";
 /** The id of the poll roll. */
@@ -26,11 +41,13 @@ REACTABLE_EMOTES.set("umfragen", POLL_ROLE_ID);
 let discordLiveChat: TextChannel;
 
 let reconnectTries = 3;
-let streamCache = {
+let streamCache: StreamData = {
+    type: "live",
     title: "",
-    game: "",
-    viewers: -1,
-    thumbnail: ""
+    game_id: "",
+    viewer_count: -1,
+    thumbnail_url: "",
+    name: "test"
 }
 
 let lastLiveNotification: Message;
@@ -40,8 +57,8 @@ require('dotenv').config();
 // Start checking for streams when the discord bot is ready.
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
-    discordLiveChat = client.channels.cache.get(DEBUG ? DEBUG_LIVE_CHANNEL_ID : LIVE_CHANNEL_ID) as TextChannel
-    checkTwitchStatus().then();
+    discordLiveChat = client.channels.cache.get(DEBUG ? DEBUG_LIVE_CHANNEL_ID : LIVE_CHANNEL_ID) as TextChannel;
+    checkTwitchStatus();
     setInterval(checkTwitchStatus, 60 * 1000);
 });
 
@@ -92,23 +109,21 @@ async function checkTwitchStatus() {
         console.error(response.statusText);
         return;
     }
+    let json = await response.json() as TwitchResponse;
 
-    let json = await response.json();
+    let data = json.data[0];
 
-    json = json.data[0];
-    if (json && json.type === "live") {
+    if (data && data.type === "live") {
         reconnectTries = 3;
-
-        streamCache.title = json.title;
-        streamCache.game = await getGameFromID(json.game_id);
-        streamCache.viewers = json.viewer_count;
-        streamCache.thumbnail = json.thumbnail_url.replace("{width}", width).replace("{height}", Math.round(width / 16 * 9));
+        streamCache = data;
+        streamCache.game_id = await getGameFromID(data.game_id);
+        streamCache.thumbnail_url = data.thumbnail_url.replace("{width}", `${width}`).replace("{height}", `${Math.round(width / 16 * 9)}`);
         width++;
 
         await updateMessage();
 
     } else {
-        if (lastLiveNotification === undefined) return
+        if (lastLiveNotification === undefined) return;
 
         if (reconnectTries === 0) {
             await lastLiveNotification.delete();
@@ -122,24 +137,23 @@ async function checkTwitchStatus() {
 
 /** Updates the message in the live chat. */
 async function updateMessage() {
+    const embed = buildEmbed(streamCache);
+
     if (lastLiveNotification !== undefined) {
-        await lastLiveNotification.edit(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache));
+        await lastLiveNotification.edit({
+            content: `<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`,
+            embeds: [embed]
+        });
     } else {
-        lastLiveNotification = await discordLiveChat.send(`<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`, buildEmbed(streamCache));
+        lastLiveNotification = await discordLiveChat.send({
+            content: `<@&${TWITCH_ROLE_ID}>: Niklas ist jetzt live`,
+            embeds: [embed]
+        });
     }
 }
 
 /** Generates an embed with given twitch stream information. */
-function buildEmbed(streamInfo: any): MessageEmbed {
-    const embed = new MessageEmbed();
-    embed.setColor("#9400D3");
-    embed.setAuthor("derNiklaas", "https://cdn.discordapp.com/avatars/153113441429749760/a_5d47b975cfdd39ca9f82be920008958d.webp", "https://www.twitch.tv/derNiklaas");
-    embed.setTitle(streamInfo.title);
-    embed.setURL(`https://www.twitch.tv/${TWITCH_CHANNEL}`);
-    embed.addField("Kategorie", streamInfo.game, true);
-    embed.addField("Zuschauer", streamInfo.viewers, true);
-    embed.setImage(streamInfo.thumbnail);
-
+function buildEmbed(streamInfo: StreamData): MessageEmbed {
     const date = new Date(Date.now());
 
     let tries = "";
@@ -151,9 +165,35 @@ function buildEmbed(streamInfo: any): MessageEmbed {
     const minutes = date.getMinutes() < 10 ? "0" + date.getMinutes() : date.getMinutes();
     const seconds = date.getSeconds() < 10 ? "0" + date.getSeconds() : date.getSeconds();
 
-    embed.setFooter(`Letztes Update: ${hours}:${minutes}:${seconds} ${tries}`);
-
-    return embed;
+    return new MessageEmbed(
+        {
+            author: {
+                name: "derNiklaas",
+                iconURL: "https://cdn.discordapp.com/avatars/153113441429749760/a_5d47b975cfdd39ca9f82be920008958d.webp",
+                proxyIconURL: "https://www.twitch.tv/derNiklaas"
+            },
+            hexColor: "#9400D3",
+            title: streamInfo.title,
+            url: `https://www.twitch.tv/${TWITCH_CHANNEL}`,
+            fields: [
+                {
+                    name: "Kategorie",
+                    value: streamInfo.game_id,
+                    inline: true
+                },
+                {
+                    name: "Zuschauer",
+                    value: streamInfo.viewer_count.toString(),
+                    inline: true
+                },
+            ],
+            image: {
+                url: streamInfo.thumbnail_url
+            },
+            footer: {
+                text: `Letztes Update: ${hours}:${minutes}:${seconds} ${tries}`
+            }
+        });
 }
 
 async function getGameFromID(id: string): Promise<string> {
@@ -165,7 +205,7 @@ async function getGameFromID(id: string): Promise<string> {
     });
 
     if (response.ok) {
-        const json = await response.json();
+        const json = await response.json() as TwitchResponse;
         if (json.data.length === 0) {
             return "Unbekannt";
         } else {
@@ -178,4 +218,17 @@ async function getGameFromID(id: string): Promise<string> {
     }
 }
 
-client.login(process.env.DISCORD_TOKEN).then();
+client.login(process.env.DISCORD_TOKEN)
+
+interface TwitchResponse {
+    data: StreamData[]
+}
+
+interface StreamData {
+    type: string
+    title: string
+    game_id: string
+    viewer_count: number
+    thumbnail_url: string
+    name: string
+}
